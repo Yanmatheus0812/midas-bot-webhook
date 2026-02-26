@@ -13,7 +13,7 @@ from csv import DictWriter
 
 load_dotenv()  
 botAPI = os.environ.get("TELEGRAM_BOT_TOKEN")
-bot = telebot.TeleBot(botAPI)
+bot = telebot.TeleBot(botAPI, threaded=False)
 app = Flask(__name__)
 
 WEBHOOK_PATH = f"/webhook/{botAPI}"
@@ -175,10 +175,6 @@ def webhook():
     update = telebot.types.Update.de_json(json_string)
     bot.process_new_updates([update])
     return "OK", 200
-
-
-if os.environ.get("VERCEL"):
-    configurar_webhook()
 
 
 if __name__ == "__main__":
