@@ -1,6 +1,7 @@
 from datetime import datetime
 import os
 import telebot
+from flask import Flask, abort, request
 from dotenv import load_dotenv
 from telebot import types
 from handlers.desfazerRegistro import desfazer_registro, msg_confirmacao
@@ -11,6 +12,22 @@ from csv import DictReader
 load_dotenv()  
 botAPI = os.environ.get("TELEGRAM_BOT_TOKEN")
 bot = telebot.TeleBot(botAPI)
+app = Flask(__name__)
+
+WEBHOOK_PATH = f"/webhook/{botAPI}"
+
+
+def configurar_webhook():
+    base_url = os.environ.get("WEBHOOK_BASE_URL")
+
+    if not base_url:
+        return
+
+    base_url = base_url.rstrip("/")
+    webhook_url = f"{base_url}{WEBHOOK_PATH}"
+
+    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
 
 # mensagem de boas vindas com os botoes keyboard 
 @bot.message_handler(['start'])
@@ -125,4 +142,33 @@ def resposta_btn_(call:types.CallbackQuery):
 
             bot.send_message(call.message.chat.id, "Ok, cancelado")
 
-bot.infinity_polling()
+
+@app.get("/")
+def healthcheck():
+    return "Midas Bot online", 200
+
+
+@app.post(WEBHOOK_PATH)
+def webhook():
+    if request.content_type != "application/json":
+        abort(403)
+
+    json_string = request.get_data().decode("utf-8")
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "OK", 200
+
+
+if os.environ.get("VERCEL"):
+    configurar_webhook()
+
+
+if __name__ == "__main__":
+    usar_webhook_local = os.environ.get("USE_WEBHOOK", "false").lower() == "true"
+
+    if usar_webhook_local:
+        configurar_webhook()
+        porta = int(os.environ.get("PORT", "8000"))
+        app.run(host="0.0.0.0", port=porta)
+    else:
+        bot.infinity_polling()

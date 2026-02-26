@@ -26,6 +26,7 @@ handlers/
 - Python 3.10+
 - Biblioteca `pyTelegramBotAPI`
 - Biblioteca `python-dotenv`
+- Biblioteca `Flask` (modo webhook)
 
 ## Instalação
 
@@ -43,7 +44,7 @@ venv\Scripts\activate  # Windows
 3. Instale as dependências:
 
 ```bash
-pip install pyTelegramBotAPI python-dotenv
+pip install -r requirements.txt
 ```
 
 ## Configuração
@@ -58,6 +59,7 @@ touch .env
 
 ```env
 TELEGRAM_BOT_TOKEN=seu_token_aqui
+WEBHOOK_BASE_URL=https://seu-projeto.vercel.app
 ```
 
 3. (Importante) Adicione o `.env` ao `.gitignore` para não expor seu token:
@@ -75,6 +77,37 @@ Na raiz do projeto:
 ```bash
 python3 main.py
 ```
+
+Por padrão, o bot roda em **polling** local (`infinity_polling`).
+
+Se quiser testar webhook localmente:
+
+```bash
+USE_WEBHOOK=true PORT=8000 python3 main.py
+```
+
+Nesse modo o endpoint fica em:
+
+```text
+/webhook/SEU_TELEGRAM_BOT_TOKEN
+```
+
+## Deploy no Vercel (webhook)
+
+1. Suba o projeto no Vercel (já com `vercel.json` e `requirements.txt`)
+2. Configure as variáveis de ambiente no projeto Vercel:
+
+- `TELEGRAM_BOT_TOKEN`
+- `WEBHOOK_BASE_URL` (ex: `https://seu-projeto.vercel.app`)
+
+3. Faça um novo deploy para aplicar as variáveis
+4. O bot registrará o webhook em:
+
+```text
+https://seu-projeto.vercel.app/webhook/SEU_TELEGRAM_BOT_TOKEN
+```
+
+> Importante: em produção no Vercel, o bot não usa polling; ele responde via webhook HTTP.
 
 ## Como usar no Telegram
 
@@ -127,4 +160,5 @@ Colunas:
 
 - O relatório agrupa por categoria e exibe também os lançamentos individuais.
 - Se não houver registros no mês, o bot informa que não há dados.
-- O bot usa `infinity_polling()`, então deve ficar em execução contínua para responder mensagens.
+- Localmente o bot usa `infinity_polling()` por padrão.
+- Em produção (Vercel), o bot usa webhook.
