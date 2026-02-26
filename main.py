@@ -23,16 +23,20 @@ def configurar_webhook():
     base_url = os.environ.get("WEBHOOK_BASE_URL")
 
     if not base_url:
-        return
+        return False
 
     base_url = base_url.rstrip("/")
     webhook_url = f"{base_url}{WEBHOOK_PATH}"
 
-    bot.remove_webhook()
-    bot.set_webhook(url=webhook_url)
+    try:
+        info = bot.get_webhook_info()
+        if info.url == webhook_url:
+            return True
 
-
-inicializar_banco()
+        bot.set_webhook(url=webhook_url)
+        return True
+    except telebot.apihelper.ApiTelegramException:
+        return False
 
 # mensagem de boas vindas com os botoes keyboard 
 @bot.message_handler(['start'])
@@ -164,6 +168,8 @@ def healthcheck():
 def webhook():
     if request.content_type != "application/json":
         abort(403)
+
+    inicializar_banco()
 
     json_string = request.get_data().decode("utf-8")
     update = telebot.types.Update.de_json(json_string)
