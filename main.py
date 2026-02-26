@@ -1,4 +1,5 @@
 from datetime import datetime
+from io import BytesIO, StringIO
 import os
 import telebot
 from flask import Flask, abort, request
@@ -6,8 +7,9 @@ from dotenv import load_dotenv
 from telebot import types
 from handlers.desfazerRegistro import desfazer_registro, msg_confirmacao
 from handlers.processaGastos import adicionar_gastos, excluir_gasto
-from handlers.relatorio import obter_caminho_gastos_por_mes, obter_mes_anterior, relatorio_mensal
-from csv import DictReader
+from handlers.relatorio import obter_mes_anterior, obter_registros_gastos_por_mes, relatorio_mensal
+from handlers.db import inicializar_banco
+from csv import DictWriter
 
 load_dotenv()  
 botAPI = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -28,6 +30,9 @@ def configurar_webhook():
 
     bot.remove_webhook()
     bot.set_webhook(url=webhook_url)
+
+
+inicializar_banco()
 
 # mensagem de boas vindas com os botoes keyboard 
 @bot.message_handler(['start'])
@@ -68,7 +73,7 @@ def resposta_btn_keyboard(msg:types.Message):
 
         case 'Relatório mensal' | 'relatório mensal' | '/Relatorio' | '/relatorio':
             agora = datetime.now()
-            texto = relatorio_mensal(agora.year, agora.month)
+            texto = relatorio_mensal(agora.year, agora.month, msg.chat.id)
 
             markup = types.InlineKeyboardMarkup()
             btn_csv = types.InlineKeyboardButton("Gerar CSV", callback_data=f"csv:{agora.year}:{agora.month}")
@@ -78,7 +83,7 @@ def resposta_btn_keyboard(msg:types.Message):
 
         case 'Relatório anterior' | 'relatório anterior' | '/Relatorio_anterior' | '/relatorio_anterior':
             ano, mes = obter_mes_anterior()
-            texto = relatorio_mensal(ano, mes)
+            texto = relatorio_mensal(ano, mes, msg.chat.id)
 
             markup = types.InlineKeyboardMarkup()
             btn_csv = types.InlineKeyboardButton("Gerar CSV",callback_data=f"csv:{ano}:{mes}")
@@ -104,21 +109,28 @@ def resposta_btn_(call:types.CallbackQuery):
         ano = int(ano)
         mes = int(mes)
 
-        caminho = obter_caminho_gastos_por_mes(ano, mes)
-
-        if not os.path.exists(caminho):
-            bot.send_message(chat_id, "Não há CSV para este mês.")
-            return
-
-        with open(caminho, 'r', encoding='utf-8') as f:
-            registros = list(DictReader(f))
+        registros = obter_registros_gastos_por_mes(chat_id, ano, mes)
 
         if not registros:
             bot.send_message(chat_id, "O CSV deste mês está vazio.")
             return
 
-        with open(caminho, 'rb') as arquivo:
-            bot.send_document(chat_id, arquivo)
+        buffer_string = StringIO()
+        escritor_csv = DictWriter(buffer_string, fieldnames=["Valor", "Categoria", "Data"])
+        escritor_csv.writeheader()
+
+        for registro in registros:
+            escritor_csv.writerow(
+                {
+                    "Valor": str(registro["valor"]),
+                    "Categoria": registro["categoria"],
+                    "Data": registro["data"],
+                }
+            )
+
+        arquivo_bytes = BytesIO(buffer_string.getvalue().encode("utf-8"))
+        arquivo_bytes.name = f"gastos_{ano}_{mes:02d}.csv"
+        bot.send_document(chat_id, arquivo_bytes)
 
         return
     
